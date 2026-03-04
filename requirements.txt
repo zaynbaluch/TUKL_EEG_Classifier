@@ -9,5 +9,4 @@ seaborn
 tqdm
 pyyaml
 vmdpy
-wandb
-mspca
+tensorboard

@@ -1,12 +1,25 @@
 import torch
 from tqdm import tqdm
-import wandb
 import gc
 
-def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device, aux_loss_weight=0.3, enable_tracker=False):
+def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device, 
+                aux_loss_weight=0.3, writer=None, epoch=0, global_step=0):
     """
     Train the model for one epoch.
-    Returns: avg_loss, avg_acc
+    
+    Args:
+        model: The model to train
+        data_loader: Training data loader
+        optimizer: Optimizer
+        loss_fn: Loss function
+        active_branches: List of active branch indices
+        device: torch.device
+        aux_loss_weight: Weight for auxiliary branch losses
+        writer: TensorBoard SummaryWriter (optional)
+        epoch: Current epoch number (for TensorBoard logging)
+        global_step: Running global step counter (for batch-level logging)
+        
+    Returns: avg_loss, avg_acc, global_step
     """
     model.train()
     
@@ -23,6 +36,10 @@ def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device,
     train_loss = 0.0
     correct_train = 0.0
     total_samples = 0
+    
+    # Track per-batch losses for detailed logging
+    main_losses = []
+    aux_losses = []
     
     # Create progress bar
     pbar = tqdm(data_loader, desc="Training", leave=False)
@@ -41,26 +58,8 @@ def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device,
         # Calculate loss
         main_loss = loss_fn(output, label)
         
-        # Auxiliary loss (from branches)
+        # Auxiliary loss (from active branches only)
         aux_loss = 0.0
-        # aux_output corresponds to active_branches. 
-        # Wait, model returns aux_outputs list consistently?
-        # Model returns aux_outputs list of length = number of active branches?
-        # Let's check model code.
-        # "aux = branch(x) ... aux_outputs.append(aux)" inside the loop over branches.
-        # The loop iterates over all branches but appends zeros if inactive.
-        # So aux_outputs has length == len(model.branches).
-        # But we only want to train active branches.
-        # Inactive branches output zeros, so calculating loss on them might be weird if labels are not relevant?
-        # But wait, original code did: "aux_loss = sum(loss_fn(aux, label) for aux in aux_output)" 
-        # If aux is zeros, loss_fn might be high/garbage?
-        # In original code, active_branches logic:
-        # if idx in active_branches: feat, aux = branch(x) ... 
-        # else: feat=zeros, aux=zeros.
-        # So inactive branches return zero predictions.
-        # If we optimize this, we try to force zeros to match labels? That's bad.
-        # We should only sum loss for active branches.
-        
         for idx, aux in enumerate(aux_output):
              if idx in active_branches:
                  aux_loss += loss_fn(aux, label)
@@ -69,6 +68,10 @@ def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device,
 
         # Backward pass
         total_loss.backward()
+        
+        # Gradient clipping for stability
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        
         optimizer.step()
 
         # Metrics
@@ -77,12 +80,25 @@ def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device,
         train_loss += total_loss.item()
         total_samples += label.size(0)
         
+        # Track for logging
+        main_losses.append(main_loss.item())
+        aux_losses.append(aux_loss.item() if isinstance(aux_loss, torch.Tensor) else aux_loss)
+        
         # Update progress bar
-        current_acc =  (preds == label).float().mean().item()
+        current_acc = (preds == label).float().mean().item()
         pbar.set_postfix({'loss': total_loss.item(), 'acc': current_acc})
         
-        if enable_tracker and batch_idx % 10 == 0:
-             wandb.log({"batch_train_loss": total_loss.item(), "batch_train_acc": current_acc})
+        # TensorBoard batch-level logging (every 10 batches)
+        if writer is not None and batch_idx % 10 == 0:
+            writer.add_scalar('Batch/train_total_loss', total_loss.item(), global_step)
+            writer.add_scalar('Batch/train_main_loss', main_loss.item(), global_step)
+            writer.add_scalar('Batch/train_aux_loss', 
+                              aux_loss.item() if isinstance(aux_loss, torch.Tensor) else aux_loss, 
+                              global_step)
+            writer.add_scalar('Batch/train_acc', current_acc, global_step)
+            writer.add_scalar('Batch/grad_norm', grad_norm.item(), global_step)
+        
+        global_step += 1
         
         # Cleanup
         del x1, x2, x3, output, aux_output, label, total_loss
@@ -90,4 +106,4 @@ def train_epoch(model, data_loader, optimizer, loss_fn, active_branches, device,
     avg_loss = train_loss / len(data_loader)
     avg_acc = correct_train / total_samples
 
-    return avg_loss, avg_acc
+    return avg_loss, avg_acc, global_step

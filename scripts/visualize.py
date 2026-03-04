@@ -3,8 +3,8 @@ import yaml
 import os
 import sys
 import torch
+import numpy as np
 from torch.utils.data import DataLoader
-import wandb
 
 # Add src to python path for imports
 sys.path.append(os.getcwd())
@@ -41,7 +41,11 @@ def main():
     output_size = config['model']['output_size']
     
     model = ConvParallelEEG1DModel(input_channels_list, output_size)
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+    checkpoint = torch.load(args.checkpoint, map_location=device)
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    else:
+        model.load_state_dict(checkpoint)
     model.to(device)
     model.eval()
     

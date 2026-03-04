@@ -4,7 +4,6 @@ from torch.utils.data import Dataset
 import pandas as pd
 from scipy.signal import stft
 import pywt
-from mspca import mspca
 from src.data.preprocessing import bassel_bandpass_filter, mspca_denoise, vmd_decompose
 
 class EEGDataset(Dataset):
@@ -40,13 +39,9 @@ class EEGDataset(Dataset):
         self.feature_branch_2 = config['data'].get('feature_branch_2', 'wavelet')
         self.vmd_modes = config['data'].get('vmd_modes', 5)
 
-        # Initialize MSPCA model once to avoid memory leaks/overhead
-        self.mspca_model = None
-        if self.preprocess_method == 'mspca':
-            try:
-                self.mspca_model = mspca.MultiscalePCA()
-            except ImportError:
-                print("Warning: mspca library not found. MSPCA denoising will be disabled.")
+        # Device for GPU-accelerated MSPCA
+        device_str = config['training'].get('device', 'cuda')
+        self.device = torch.device(device_str if torch.cuda.is_available() else 'cpu')
 
     def __len__(self):
         return len(self.file_list)
@@ -72,7 +67,7 @@ class EEGDataset(Dataset):
             # We iterate over channels if C > 1, but here C=1 typically.
             clean_data_list = []
             for ch in range(eeg_data.shape[0]):
-                clean_ch = mspca_denoise(eeg_data[ch], model=self.mspca_model)
+                clean_ch = mspca_denoise(eeg_data[ch], device=self.device)
                 clean_data_list.append(clean_ch.flatten())
             eeg_data = np.stack(clean_data_list) # [C, T]
             

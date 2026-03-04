@@ -26,7 +26,7 @@ training:
 
 tracker:
   enabled: true
-  backend: "wandb"
+  backend: "tensorboard"
   project_name: "eeg-abnormality-classification"
   run_name: null               # Auto-generated if null
 

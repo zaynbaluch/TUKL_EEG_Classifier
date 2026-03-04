@@ -45,7 +45,11 @@ def main():
     output_size = config['model']['output_size']
     
     model = ConvParallelEEG1DModel(input_channels_list, output_size)
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+    checkpoint = torch.load(args.checkpoint, map_location=device)
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    else:
+        model.load_state_dict(checkpoint)
     model.to(device)
     model.eval()
     
