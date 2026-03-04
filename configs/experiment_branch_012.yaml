@@ -1,0 +1,5 @@
+model:
+  active_branches: [0, 1, 2]
+
+tracker:
+  run_name: "branch_012_all"

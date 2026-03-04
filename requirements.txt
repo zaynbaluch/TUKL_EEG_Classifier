@@ -1,0 +1,13 @@
+torch>=2.0
+numpy
+pandas
+scipy
+scikit-learn
+PyWavelets
+matplotlib
+seaborn
+tqdm
+pyyaml
+vmdpy
+wandb
+mspca

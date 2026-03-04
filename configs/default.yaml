@@ -1,0 +1,42 @@
+data:
+  train_csv: "./dataset/train.csv"
+  eval_csv: "./dataset/eval.csv"
+  test_csv: "./dataset/test.csv"
+  num_eeg_channels: 1          # Configurable
+  preprocessing: "mspca"       # Options: "bessel", "mspca"
+  feature_branch_2: "vmd"      # Options: "wavelet", "vmd"
+  vmd_modes: 5                 # Number of IMFs for VMD
+
+model:
+  output_size: 3
+  hidden_size: 20
+  active_branches: [0]         # Which branches to activate
+
+training:
+  epochs: 50
+  batch_size: 4
+  eval_batch: 4
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  label_smoothing: 0.1
+  aux_loss_weight: 0.3
+  scheduler_patience: 3
+  scheduler_factor: 0.5
+  device: "cuda"               # "cuda" or "cpu"
+
+tracker:
+  enabled: true
+  backend: "wandb"
+  project_name: "eeg-abnormality-classification"
+  run_name: null               # Auto-generated if null
+
+output:
+  checkpoint_dir: "./outputs/checkpoints"
+  prediction_dir: "./outputs/predictions"
+  log_dir: "./outputs/logs"
+  plot_dir: "./outputs/plots"
+
+visualization:
+  tsne_subsample_size: 2000    # Configurable
+  tsne_perplexity: 30
+  tsne_random_state: 42
